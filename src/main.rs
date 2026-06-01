@@ -1,3 +1,6 @@
+mod tokenizer;
+
 fn main() {
-    println!("Hello, interpreter!");
+    let tokens = tokenizer::tokenize("+%\n!=\n$");
+    println!("{:#?}", tokens);
 }
