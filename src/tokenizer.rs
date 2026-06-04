@@ -1,4 +1,6 @@
-#[derive(Debug)]
+use std::fmt;
+
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Keyword {
     And,
     Class,
@@ -18,7 +20,7 @@ pub enum Keyword {
     While,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Keyword(Keyword),
     Identifier(String),
@@ -63,10 +65,27 @@ pub enum TokenErrorType {
     UnterminatedString(String),
 }
 
+impl fmt::Display for TokenErrorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TokenErrorType::UnexpectedCharacter(c)
+                => write!(f, "Unexpected character: {}", c),
+            TokenErrorType::UnterminatedString(str)
+                => write!(f, "Unterminated string: \"{}\"", str),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TokenError {
     pub error: TokenErrorType,
     pub line_number: usize,
+}
+
+impl fmt::Display for TokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Token error on line {}:\n\t{}", self.line_number, self.error)
+    }
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<TokenMeta>, Vec<TokenError>> {
@@ -79,9 +98,8 @@ pub fn tokenize(input: &str) -> Result<Vec<TokenMeta>, Vec<TokenError>> {
     };
 
     while !tokenizer.is_at_end() {
-        let current_char = tokenizer.get_current_char();
-        let next_char = tokenizer.get_next_char();
-        match (current_char, next_char) {
+        let chars = (tokenizer.get_current_char(), tokenizer.get_next_char());
+        match chars {
             ('(', _        ) => tokenizer.add_token(Token::ParenStart),
             (')', _        ) => tokenizer.add_token(Token::ParenEnd),
             ('{', _        ) => tokenizer.add_token(Token::BraceStart),
@@ -93,6 +111,25 @@ pub fn tokenize(input: &str) -> Result<Vec<TokenMeta>, Vec<TokenError>> {
             ('*', _        ) => tokenizer.add_token(Token::Asterisk),
             (';', _        ) => tokenizer.add_token(Token::Semicolon),
             ('/', Some('/')) => tokenizer.advance_until('\n'),
+            ('/', Some('*')) => {
+                tokenizer.advance_n(2);
+                let mut nest_count: u8 = 1;
+                while !tokenizer.is_at_end() {
+                    let chars = (tokenizer.get_current_char(), tokenizer.get_next_char());
+                    match chars {
+                        ('/', Some('*')) => nest_count += 1,
+                        ('*', Some('/')) => {
+                            nest_count -= 1;
+                            if nest_count == 0 {
+                                break;
+                            }
+                        },
+                        _ => {},
+                    }
+                    tokenizer.advance();
+                }
+                tokenizer.advance_n(2);
+            },
             ('/', _        ) => tokenizer.add_token(Token::Slash),
             ('!', Some('=')) => tokenizer.add_double_token(Token::BangEquals),
             ('!', _        ) => tokenizer.add_token(Token::Bang),
@@ -119,7 +156,7 @@ pub fn tokenize(input: &str) -> Result<Vec<TokenMeta>, Vec<TokenError>> {
 
                 let mut does_end_with_period = false;
                 while !tokenizer.is_at_end() {
-                    let (mut cc, mut nc) = (tokenizer.get_current_char(), tokenizer.get_next_char());
+                    let (cc, nc) = (tokenizer.get_current_char(), tokenizer.get_next_char());
                     if !(cc.is_ascii_digit() || cc == '.') {
                         break;
                     }
